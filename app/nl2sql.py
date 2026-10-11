@@ -37,12 +37,27 @@ def clean_json(text: str) -> dict:
 
 def validate_sql(sql: str) -> str:
     cleaned = sql.strip().rstrip(";")
+    
+    # 1. Wajib SELECT
     if not re.match(r"^(select|with)\b", cleaned, flags=re.IGNORECASE):
         raise ValueError("Hanya query SELECT yang diizinkan.")
+        
+    # 2. Blokir DDL / DML berbahaya
     forbidden = ["insert", "update", "delete", "drop", "alter", "create", "truncate"]
     for w in forbidden:
         if re.search(rf"\b{w}\b", cleaned, flags=re.IGNORECASE):
             raise ValueError(f"Perintah '{w}' dilarang demi keamanan skema.")
+            
+    # 3. Kriteria 4.c: Wajib HANYA mengakses tabel yang didefinisikan
+    allowed_tables = {"jabatan_fungsional", "fakultas", "dosen", "remunerasi"}
+    # Deteksi tabel setelah kata kunci FROM atau JOIN
+    tables_used = set(re.findall(r"\b(?:from|join)\s+([a-zA-Z0-9_]+)", cleaned, flags=re.IGNORECASE))
+    
+    # Pastikan setiap tabel yang dipanggil ada di daftar resmi
+    invalid_tables = tables_used - allowed_tables
+    if invalid_tables:
+        raise ValueError(f"Tabel dilarang atau tidak sah: {', '.join(invalid_tables)}")
+        
     return cleaned
 
 def ask(question: str) -> dict:
