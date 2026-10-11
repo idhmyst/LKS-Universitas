@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LKS Universitas AI - Assistant & Natural Language to SQL</title>
+  <meta name="description" content="Sistem Asisten AI Universitas LKS untuk query data dosen, fakultas, dan remunerasi secara interaktif.">
+  
+  <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-primary: #0a0f1d;
+      --bg-secondary: #111827;
+      --bg-card: rgba(17, 24, 39, 0.75);
+      --bg-card-hover: rgba(31, 41, 55, 0.85);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-highlight: rgba(99, 102, 241, 0.3);
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --text-sub: #6b7280;
+      --accent-primary: #6366f1;
+      --accent-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%);
+      --accent-glow: rgba(99, 102, 241, 0.25);
+      --success-color: #10b981;
+      --success-glow: rgba(16, 185, 129, 0.2);
+      --danger-color: #ef4444;
+      --sql-bg: #0d1117;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.12) 0%, transparent 40%),
+        radial-gradient(circle at 85% 85%, rgba(236, 72, 153, 0.08) 0%, transparent 45%);
+    }
+
+    /* Navbar Header */
+    header {
+      background: rgba(10, 15, 29, 0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-color);
+      padding: 1rem 2rem;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.875rem;
+    }
+
+    .logo-badge {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: var(--accent-gradient);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 1.25rem;
+      color: white;
+      box-shadow: 0 4px 20px var(--accent-glow);
+    }
+
+    .brand-text h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(to right, #fff, #cbd5e1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-text p {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      color: var(--success-color);
+      padding: 0.375rem 0.875rem;
+      border-radius: 9999px;
+      font-size: 0.8125rem;
+      font-weight: 600;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--success-color);
+      border-radius: 50%;
+      box-shadow: 0 0 10px var(--success-color);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.85); }
+    }
+
+    /* Main Container */
+    main {
+      flex: 1;
+      max-width: 1040px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.75rem;
+    }
+
+    /* Hero / Intro Banner */
+    .hero-banner {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 1.75rem 2rem;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-banner::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--accent-gradient);
+    }
+
+    .hero-banner h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      color: #fff;
+    }
+
+    .hero-banner p {
+      font-size: 0.9375rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* Suggestion Chips */
+    .chips-label {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-sub);
+      margin-top: 1rem;
+      margin-bottom: 0.625rem;
+    }
+
+    .chips-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .chip-btn {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-color);
+      color: #cbd5e1;
+      padding: 0.45rem 0.875rem;
+      border-radius: 10px;
+      font-size: 0.8125rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+    }
+
+    .chip-btn:hover {
+      background: rgba(99, 102, 241, 0.15);
+      border-color: var(--border-highlight);
+      color: #fff;
+      transform: translateY(-1px);
+    }
+
+    /* Chat / Interaction History */
+    #chat-container {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .message-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 18px;
+      padding: 1.5rem;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+      animation: fadeIn 0.3s ease forwards;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .msg-user {
+      border-left: 4px solid #6366f1;
+      margin-bottom: 1rem;
+    }
+
+    .msg-user .user-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8125rem;
+      font-weight: 700;
+      color: #818cf8;
+      margin-bottom: 0.375rem;
+    }
+
+    .msg-user .user-text {
+      font-size: 1.0625rem;
+      color: #fff;
+      font-weight: 500;
+    }
+
+    .msg-ai {
+      border-left: 4px solid #10b981;
+    }
+
+    .ai-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.75rem;
+    }
+
+    .ai-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8125rem;
+      font-weight: 700;
+      color: #34d399;
+    }
+
+    .answer-text {
+      font-size: 0.975rem;
+      line-height: 1.7;
+      color: #e2e8f0;
+      white-space: pre-wrap;
+      margin-bottom: 1.25rem;
+    }
+
+    /* SQL Block */
+    .sql-box {
+      background: var(--sql-bg);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 1.25rem;
+    }
+
+    .sql-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.5rem 1rem;
+      background: rgba(255, 255, 255, 0.03);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      font-size: 0.75rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-sub);
+    }
+
+    .copy-btn {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      cursor: pointer;
+      font-size: 0.75rem;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      transition: color 0.15s;
+    }
+
+    .copy-btn:hover {
+      color: #fff;
+    }
+
+    .sql-code {
+      padding: 1rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.875rem;
+      color: #38bdf8;
+      overflow-x: auto;
+      line-height: 1.5;
+    }
+
+    /* Data Table */
+    .table-wrapper {
+      margin-top: 1rem;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--border-color);
+      background: rgba(13, 17, 23, 0.7);
+    }
+
+    .table-info {
+      padding: 0.625rem 1rem;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .table-scroll {
+      max-height: 280px;
+      overflow: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.8125rem;
+    }
+
+    th {
+      background: rgba(255, 255, 255, 0.04);
+      color: #cbd5e1;
+      padding: 0.75rem 1rem;
+      font-weight: 600;
+      border-bottom: 1px solid var(--border-color);
+      position: sticky;
+      top: 0;
+      backdrop-filter: blur(8px);
+    }
+
+    td {
+      padding: 0.625rem 1rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      color: #e2e8f0;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    /* Fixed Input Bar */
+    .input-wrapper {
+      position: sticky;
+      bottom: 1.5rem;
+      margin-top: auto;
+      z-index: 40;
+    }
+
+    .input-card {
+      background: rgba(17, 24, 39, 0.95);
+      border: 1px solid var(--border-highlight);
+      border-radius: 18px;
+      padding: 0.75rem 1rem;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5), 0 0 20px var(--accent-glow);
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    #query-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #fff;
+      font-size: 0.95rem;
+      font-family: inherit;
+      padding: 0.5rem 0.25rem;
+    }
+
+    #query-input::placeholder {
+      color: #64748b;
+    }
+
+    .send-btn {
+      background: var(--accent-gradient);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 0.7rem 1.4rem;
+      font-weight: 600;
+      font-size: 0.875rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 14px var(--accent-glow);
+      flex-shrink: 0;
+    }
+
+    .send-btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+    }
+
+    .send-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Loading Spinner */
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Error alert */
+    .alert-danger {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #f87171;
+      border-radius: 12px;
+      padding: 0.875rem 1.25rem;
+      font-size: 0.875rem;
+      margin-top: 0.75rem;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header>
+    <div class="brand">
+      <div class="logo-badge" id="logo-badge">LKS</div>
+      <div class="brand-text">
+        <h1 id="app-title">Universitas LKS AI Assistant</h1>
+        <p id="app-subtitle">Sistem Tanya Jawab Database Dosen & Remunerasi</p>
+      </div>
+    </div>
+    <div class="status-badge" id="status-badge">
+      <span class="status-dot"></span>
+      <span id="status-text">MySQL & Gemini Terhubung</span>
+    </div>
+  </header>
+
+  <!-- Main Body Content -->
+  <main>
+    <!-- Welcome Hero Banner -->
+    <section class="hero-banner" id="hero-banner">
+      <h2>Tanyakan Apa Saja Seputar Data Universitas</h2>
+      <p>Sistem ini memanfaatkan Natural Language to SQL (NL2SQL) dengan Gemini LLM untuk menganalisis data dosen, fakultas, jabatan fungsional, dan remunerasi secara langsung dari database.</p>
+      
+      <div class="chips-label">Contoh Pertanyaan Cepat:</div>
+      <div class="chips-container" id="chips-container">
+        <button class="chip-btn" id="chip-1" onclick="useQuery('Siapa saja dosen di fakultas Ilmu Komputer?')">
+          💻 Dosen di Fakultas Ilmu Komputer
+        </button>
+        <button class="chip-btn" id="chip-2" onclick="useQuery('Berapa total remunerasi untuk semua dosen pada tahun 2026?')">
+          💰 Total Remunerasi Tahun 2026
+        </button>
+        <button class="chip-btn" id="chip-3" onclick="useQuery('Daftar dosen yang berpendidikan S3 beserta nama fakultasnya')">
+          🎓 Dosen Berpendidikan S3
+        </button>
+        <button class="chip-btn" id="chip-4" onclick="useQuery('Siapa dekan Fakultas Ekonomi dan berapa jumlah dosen di fakultas tersebut?')">
+          🏛️ Dekan & Jumlah Dosen FE
+        </button>
+      </div>
+    </section>
+
+    <!-- Chat Messages Container -->
+    <div id="chat-container"></div>
+
+    <!-- Sticky Prompt Input Field -->
+    <div class="input-wrapper">
+      <div class="input-card">
+        <input 
+          type="text" 
+          id="query-input" 
+          placeholder="Ketik pertanyaan dalam bahasa alami... (misal: Berapa gaji pokok dosen Ahmad Fadli?)"
+          autocomplete="off"
+        />
+        <button class="send-btn" id="send-button" onclick="submitQuery()">
+          <span class="spinner" id="send-spinner"></span>
+          <span id="send-label">Kirim Pertanyaan</span>
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const input = document.getElementById('query-input');
+    const sendBtn = document.getElementById('send-button');
+    const spinner = document.getElementById('send-spinner');
+    const sendLabel = document.getElementById('send-label');
+    const chatContainer = document.getElementById('chat-container');
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        submitQuery();
+      }
+    });
+
+    function useQuery(text) {
+      input.value = text;
+      input.focus();
+      submitQuery();
+    }
+
+    function setSubmitting(isSubmitting) {
+      input.disabled = isSubmitting;
+      sendBtn.disabled = isSubmitting;
+      spinner.style.display = isSubmitting ? 'inline-block' : 'none';
+      sendLabel.textContent = isSubmitting ? 'Menganalisis...' : 'Kirim Pertanyaan';
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function copyToClipboard(text, btnElement) {
+      navigator.clipboard.writeText(text).then(() => {
+        const originalText = btnElement.innerHTML;
+        btnElement.innerHTML = '✓ Disalin';
+        setTimeout(() => {
+          btnElement.innerHTML = originalText;
+        }, 2000);
+      });
+    }
+
+    async function submitQuery() {
+      const question = input.value.trim();
+      if (!question) return;
+
+      setSubmitting(true);
+
+      // Append User Card
+      const userCard = document.createElement('div');
+      userCard.className = 'message-card msg-user';
+      userCard.innerHTML = `
+        <div class="user-header">👤 Pertanyaan Anda</div>
+        <div class="user-text">${escapeHtml(question)}</div>
+      `;
+      chatContainer.appendChild(userCard);
+      input.value = '';
+
+      // Scroll to bottom
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+
+      // Append AI Loading Placeholder
+      const aiCard = document.createElement('div');
+      aiCard.className = 'message-card msg-ai';
+      aiCard.innerHTML = `
+        <div class="ai-header">
+          <div class="ai-badge">🤖 Asisten AI Universitas LKS</div>
+        </div>
+        <div class="answer-text" style="color: var(--text-muted); font-style: italic;">
+          Sedang menerjemahkan pertanyaan ke SQL dan mengambil data database...
+        </div>
+      `;
+      chatContainer.appendChild(aiCard);
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+
+      try {
+        const res = await fetch('/api/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || data.error) {
+          aiCard.innerHTML = `
+            <div class="ai-header">
+              <div class="ai-badge" style="color: var(--danger-color);">⚠️ Terjadi Kesalahan</div>
+            </div>
+            <div class="alert-danger">${escapeHtml(data.error || data.detail || 'Gagal memproses query')}</div>
+            ${data.sql ? `
+              <div class="sql-box" style="margin-top: 1rem;">
+                <div class="sql-header">Generated SQL</div>
+                <pre class="sql-code"><code>${escapeHtml(data.sql)}</code></pre>
+              </div>
+            ` : ''}
+          `;
+          return;
+        }
+
+        // Render AI Answer, SQL Box, and Results Table
+        let htmlContent = `
+          <div class="ai-header">
+            <div class="ai-badge">🤖 Asisten AI Universitas LKS</div>
+          </div>
+          <div class="answer-text">${escapeHtml(data.answer)}</div>
+        `;
+
+        if (data.sql) {
+          const sqlEscaped = escapeHtml(data.sql);
+          htmlContent += `
+            <div class="sql-box">
+              <div class="sql-header">
+                <span>QUERY SQL DIEKSEKUSI</span>
+                <button class="copy-btn" onclick="copyToClipboard(\`${data.sql.replace(/`/g, '\\`')}\`, this)">📋 Salin SQL</button>
+              </div>
+              <pre class="sql-code"><code>${sqlEscaped}</code></pre>
+            </div>
+          `;
+        }
+
+        if (data.result && data.result.length > 0) {
+          const columns = Object.keys(data.result[0]);
+          htmlContent += `
+            <div class="table-wrapper">
+              <div class="table-info">
+                <span><strong>Data Hasil Database</strong> (${data.result.length} baris)</span>
+                <span>Tabel Relasional</span>
+              </div>
+              <div class="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      ${columns.map(col => `<th>${escapeHtml(col)}</th>`).join('')}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${data.result.map(row => `
+                      <tr>
+                        ${columns.map(col => `<td>${escapeHtml(row[col] !== null ? row[col] : '-')}</td>`).join('')}
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          `;
+        }
+
+        aiCard.innerHTML = htmlContent;
+
+      } catch (err) {
+        aiCard.innerHTML = `
+          <div class="ai-header">
+            <div class="ai-badge" style="color: var(--danger-color);">⚠️ Gangguan Koneksi</div>
+          </div>
+          <div class="alert-danger">Tidak dapat terhubung ke server backend: ${escapeHtml(err.message)}</div>
+        `;
+      } finally {
+        setSubmitting(false);
+        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+        input.focus();
+      }
+    }
+  </script>
+</body>
+</html>
