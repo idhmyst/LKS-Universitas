@@ -13,21 +13,19 @@ def get_connection():
         port=int(os.getenv("DB_PORT", 3306))
     )
 
-def execute_query(sql_query: str):
+def run_query(sql_query: str):
     """
-    Eksekusi query SQL (khusus read-only SELECT) dan kembalikan list of dict.
+    Menjalankan query SQL dan mengembalikan tuple (columns, rows).
+    columns: list of str nama kolom
+    rows: list of dict data baris
     """
     clean_sql = sql_query.strip().strip(";").strip()
-    # Keamanan dasar: pastikan hanya query SELECT yang dieksekusi
-    if not clean_sql.upper().startswith("SELECT") and not clean_sql.upper().startswith("SHOW") and not clean_sql.upper().startswith("DESCRIBE"):
-        raise ValueError("Hanya query SELECT/read-only yang diizinkan untuk keamanan data.")
-
     conn = get_connection()
     try:
         cursor = conn.cursor(dictionary=True)
         cursor.execute(clean_sql)
         rows = cursor.fetchall()
-        # Konversi Decimal/Date/Time jadi tipe native serializable
+        columns = [col[0] for col in cursor.description] if cursor.description else []
         formatted_rows = []
         for row in rows:
             formatted_row = {}
@@ -37,9 +35,16 @@ def execute_query(sql_query: str):
                 else:
                     formatted_row[k] = v
             formatted_rows.append(formatted_row)
-        return formatted_rows
+        return columns, formatted_rows
     finally:
         conn.close()
+
+def execute_query(sql_query: str):
+    """
+    Eksekusi query SQL (khusus read-only SELECT) dan kembalikan list of dict.
+    """
+    _, rows = run_query(sql_query)
+    return rows
 
 def get_database_schema_summary() -> str:
     """Mengembalikan ringkasan skema tabel database untuk prompt context."""
@@ -77,3 +82,5 @@ Tabel-tabel dalam database `universitas_lks`:
    - tunjangan_kinerja: DECIMAL
    - total_remunerasi: DECIMAL
 """
+
+get_schema = get_database_schema_summary

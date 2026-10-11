@@ -1,12 +1,16 @@
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Dict
 from pydantic import BaseModel, Field
 
-class QueryRequest(BaseModel):
+class ChatRequest(BaseModel):
     question: str = Field(..., description="Pertanyaan dalam bahasa alami (Natural Language)")
 
-class QueryResponse(BaseModel):
-    question: str
+class ChatResponse(BaseModel):
     sql: str
-    result: List[Any]
-    answer: str
-    error: Optional[str] = None
+    chart: bool = False
+    chartType: Optional[str] = None
+    chartTitle: Optional[str] = None
+    columns: List[str] = []
+    data: List[Dict[str, Any]] = []
+
+# Alias untuk backwards compatibility
+QueryRequest = ChatRequest

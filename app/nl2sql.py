@@ -1,114 +1,71 @@
-import re
 import json
+import re
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
 from app.llm import get_llm
-from app.database import execute_query, get_database_schema_summary
+from app.database import get_schema, run_query
 
-def clean_sql_output(raw_text: str) -> str:
-    """Membersihkan raw response LLM agar hanya menyisakan query SQL murni."""
-    # Ambil teks di dalam blok ```sql ... ``` jika ada
-    match = re.search(r"```(?:sql)?\s*([\s\S]*?)\s*```", raw_text, re.IGNORECASE)
-    if match:
-        sql = match.group(1).strip()
-    else:
-        sql = raw_text.strip()
-    
-    # Hapus semicolon di akhir jika ada
-    sql = sql.rstrip(";").strip()
-    return sql
+SQL_CHART_PROMPT = """Kamu adalah AI pakar MySQL untuk Universitas LKS. Tugasmu mengubah pertanyaan pengguna menjadi JSON.
 
-def generate_sql(question: str) -> str:
-    """Mengubah pertanyaan bahasa alami menjadi query SQL MySQL."""
-    llm = get_llm()
-    schema_info = get_database_schema_summary()
-    
-    prompt = f"""Kamu adalah data analyst & SQL expert untuk database MySQL universitas.
-Tugasmu adalah menghasilkan query SQL murni (MySQL syntax) berdasarkan pertanyaan user dan skema tabel berikut.
+Schema Database:
+{schema}
 
-{schema_info}
+Aturan:
+1. Hanya gunakan tabel yang sah: jabatan_fungsional, fakultas, dosen, remunerasi.
+2. HANYA boleh query SELECT. Dilarang INSERT, UPDATE, DELETE, DROP, ALTER, CREATE.
+3. Jika pertanyaan meminta visualisasi, grafik, tren, atau perbandingan data, set "chart": true, pilih "chartType" ("bar", "line", atau "pie"), dan berikan "chartTitle".
+4. Jika tidak butuh grafik, set "chart": false, "chartType": null, "chartTitle": null.
+5. Balas HANYA berupa JSON valid murni tanpa markdown (tanpa ```json):
+{{
+  "sql": "SELECT ...",
+  "chart": true,
+  "chartType": "bar",
+  "chartTitle": "Perbandingan Total Remunerasi Dosen"
+}}"""
 
-ATURAN PENTING:
-1. HANYA hasilkan 1 query SQL murni (SELECT).
-2. JANGAN sertakan penjelasan apa pun selain query SQL itu sendiri.
-3. Gunakan JOIN yang tepat jika data menghubungkan antar tabel (misalnya: dosen JOIN fakultas ON dosen.fakultas_id = fakultas.id).
-4. Pencarian teks sebaiknya gunakan LIKE %...% atau nama yang relevan jika sesuai.
-5. Format mata uang ada di tunjangan dan gaji, gunakan agregasi (SUM, AVG, COUNT, MAX, MIN) sesuai kebutuhan.
-6. Jangan gunakan perintah berbahaya (INSERT, UPDATE, DELETE, DROP, ALTER).
-
-Pertanyaan User: {question}
-
-Query SQL:"""
-
-    response = llm.invoke(prompt)
-    
-    # Handle response langchain (bisa string atau list of content dicts)
-    content = response.content
-    if isinstance(content, list):
-        # Ambil text jika formatnya [{'type': 'text', 'text': '...'}]
-        raw_text = "".join([part.get("text", "") for part in content if isinstance(part, dict)])
-    else:
-        raw_text = str(content)
-        
-    return clean_sql_output(raw_text)
-
-def generate_answer(question: str, sql: str, data: list) -> str:
-    """Merangkum data hasil eksekusi query ke dalam kalimat bahasa Indonesia yang ramah dan informatif."""
-    llm = get_llm()
-    
-    # Batasi data jika terlalu banyak agar tidak melebihi konteks
-    sample_data = data[:25]
-    total_rows = len(data)
-    
-    prompt = f"""Kamu adalah asisten AI Universitas LKS yang ramah, profesional, dan membantu.
-User mengajukan pertanyaan, lalu sistem menjalankan SQL berikut dan memperoleh hasil data dari database:
-
-Pertanyaan User: {question}
-Query SQL: {sql}
-Hasil Data ({total_rows} baris ditemukan): {json.dumps(sample_data, default=str, ensure_ascii=False)}
-
-Tugasmu:
-Berikan jawaban akhir dalam bahasa Indonesia yang ringkas, jelas, akurat, dan mudah dipahami berdasarkan data di atas.
-Jika ada angka nominal uang (rupiah), formatlah dengan rapi (misal: Rp 15.000.000).
-Jika data kosong, beri tahu dengan sopan bahwa data yang dicari tidak ditemukan."""
-
-    response = llm.invoke(prompt)
-    content = response.content
-    if isinstance(content, list):
-        return "".join([part.get("text", "") for part in content if isinstance(part, dict)]).strip()
-    return str(content).strip()
-
-def process_nl2sql(question: str) -> dict:
-    """Pipeline lengkap: Natural Language -> SQL -> Database Execution -> Natural Language Answer."""
+def clean_json(text: str) -> dict:
+    text_str = str(text).strip()
+    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", text_str, flags=re.DOTALL).strip()
     try:
-        sql = generate_sql(question)
-    except Exception as e:
-        return {
-            "question": question,
-            "sql": "",
-            "result": [],
-            "answer": f"Gagal menghasilkan SQL: {str(e)}",
-            "error": str(e)
-        }
-        
-    try:
-        result = execute_query(sql)
-    except Exception as e:
-        return {
-            "question": question,
-            "sql": sql,
-            "result": [],
-            "answer": f"Terjadi kesalahan saat mengeksekusi query database: {str(e)}",
-            "error": str(e)
-        }
-        
-    try:
-        answer = generate_answer(question, sql, result)
-    except Exception as e:
-        answer = f"Berhasil mendapatkan {len(result)} data, tetapi gagal merangkum jawaban: {str(e)}"
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        # Fallback jika model menyertakan teks sebelum/sesudah blok JSON
+        match = re.search(r"\{[\s\S]*\}", text_str)
+        if match:
+            return json.loads(match.group(0))
+        raise
+
+def validate_sql(sql: str) -> str:
+    cleaned = sql.strip().rstrip(";")
+    if not re.match(r"^(select|with)\b", cleaned, flags=re.IGNORECASE):
+        raise ValueError("Hanya query SELECT yang diizinkan.")
+    forbidden = ["insert", "update", "delete", "drop", "alter", "create", "truncate"]
+    for w in forbidden:
+        if re.search(rf"\b{w}\b", cleaned, flags=re.IGNORECASE):
+            raise ValueError(f"Perintah '{w}' dilarang demi keamanan skema.")
+    return cleaned
+
+def ask(question: str) -> dict:
+    schema = get_schema()
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", SQL_CHART_PROMPT),
+        ("human", "{question}")
+    ])
+    chain = prompt | get_llm() | StrOutputParser()
+    raw = chain.invoke({"schema": schema, "question": question})
+    plan = clean_json(raw)
+
+    safe_sql = validate_sql(plan["sql"])
+    columns, rows = run_query(safe_sql)
 
     return {
-        "question": question,
-        "sql": sql,
-        "result": result,
-        "answer": answer,
-        "error": None
+        "sql": safe_sql,
+        "chart": plan.get("chart", False),
+        "chartType": plan.get("chartType"),
+        "chartTitle": plan.get("chartTitle"),
+        "columns": columns,
+        "data": rows
     }
+
+# Alias untuk kompatibilitas
+process_nl2sql = ask

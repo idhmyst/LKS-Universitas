@@ -1,11 +1,11 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 import os
 
-from app.schemas import QueryRequest, QueryResponse
-from app.nl2sql import process_nl2sql
+from app.schemas import ChatRequest, ChatResponse
+from app.nl2sql import ask
 
 app = FastAPI(
     title="LKS Universitas AI API",
@@ -46,10 +46,14 @@ def read_root():
         "docs_url": "/docs"
     }
 
-@app.post("/api/query", response_model=QueryResponse)
-def handle_query(payload: QueryRequest):
+@app.post("/chat", response_model=ChatResponse)
+@app.post("/api/query")
+def handle_chat(payload: ChatRequest):
     if not payload.question or not payload.question.strip():
         raise HTTPException(status_code=400, detail="Pertanyaan tidak boleh kosong")
     
-    result = process_nl2sql(payload.question)
-    return result
+    try:
+        result = ask(payload.question)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
